@@ -18,10 +18,30 @@ public class AudioMerger {
 
     private static final Logger logger = LoggerFactory.getLogger(AudioMerger.class);
     private double timeStringToSeconds(String timeString) {
+        // Дополнительно проверяем, содержит ли строка часы
+        if (!timeString.contains(":")) {
+            return Double.parseDouble(timeString); // Предполагаем, что строка уже в секундах
+        }
+
         String[] parts = timeString.split(":");
-        double hours = Double.parseDouble(parts[0]);
-        double minutes = Double.parseDouble(parts[1]);
-        double seconds = Double.parseDouble(parts[2]);
+        double hours = 0;
+        double minutes = 0;
+        double seconds = 0;
+
+        // Корректируем для строки времени, которая может быть в формате mm:ss.SSS или hh:mm:ss.SSS
+        if (parts.length == 3) {
+            hours = Double.parseDouble(parts[0]);
+            minutes = Double.parseDouble(parts[1]);
+            seconds = Double.parseDouble(parts[2]);
+        } else if (parts.length == 2) {
+            minutes = Double.parseDouble(parts[0]);
+            seconds = Double.parseDouble(parts[1]);
+        } else if (parts.length == 1) {
+            seconds = Double.parseDouble(parts[0]);
+        } else {
+            throw new IllegalArgumentException("Invalid time format: " + timeString);
+        }
+
         return hours * 3600 + minutes * 60 + seconds;
     }
     public Path processAudioWithTranslations(String sourceFilePath, TranscriptionResult transcriptionResult) throws IOException, InterruptedException {
