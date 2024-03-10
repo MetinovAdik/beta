@@ -134,7 +134,13 @@ public class AudioMessageHandler {
             }
             // Распознавание речи с новым возвращаемым типом
             TranscriptionResult transcriptionResult = speechRecognitionService.recognizeSpeechFromAudioLocal(audioPath);
-
+            if (!Files.exists(audioPath)) {
+                logger.error("Audio file does not exist after extraction: {}", audioPath);
+                telegramService.sendMessage(chatId, "Произошла ошибка при обработке видео: аудиофайл не был создан.");
+                return; // Выход из метода, если аудиофайл не существует
+            } else {
+                logger.info("Audio file exists and ready for further processing: {}", audioPath);
+            }
             if (transcriptionResult.getSegments().isEmpty()) {
                 telegramService.sendMessage(chatId, "Не удалось распознать текст.");
                 return;
