@@ -3,7 +3,10 @@ package com.chatbot.tele;
 import com.chatbot.tele.resultbox.TranscriptionResult;
 import com.chatbot.tele.resultbox.TranscriptionSegment;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -44,9 +47,19 @@ public class AudioMerger {
         ProcessBuilder processBuilder = new ProcessBuilder("/bin/sh", "-c", ffmpegCmd.toString());
         Process process = processBuilder.start();
 
+        // Чтение вывода ошибок из процесса
+        InputStream stderr = process.getErrorStream();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(stderr));
+        String line = null;
+        StringBuilder errorOutput = new StringBuilder();
+        while ((line = reader.readLine()) != null) {
+            errorOutput.append(line).append(System.lineSeparator());
+        }
+        reader.close();
+
         int exitValue = process.waitFor();
         if (exitValue != 0) {
-            throw new RuntimeException("FFmpeg execution error");
+            throw new RuntimeException("FFmpeg execution error: " + errorOutput.toString());
         }
 
         return outputPath;
