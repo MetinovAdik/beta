@@ -17,7 +17,13 @@ import java.util.List;
 public class AudioMerger {
 
     private static final Logger logger = LoggerFactory.getLogger(AudioMerger.class);
-
+    private double timeStringToSeconds(String timeString) {
+        String[] parts = timeString.split(":");
+        double hours = Double.parseDouble(parts[0]);
+        double minutes = Double.parseDouble(parts[1]);
+        double seconds = Double.parseDouble(parts[2]);
+        return hours * 3600 + minutes * 60 + seconds;
+    }
     public Path processAudioWithTranslations(String sourceFilePath, TranscriptionResult transcriptionResult) throws IOException, InterruptedException {
         // Создаем временную директорию для работы
         Path tempDir = Files.createTempDirectory("audio_processing");
@@ -28,16 +34,16 @@ public class AudioMerger {
         // Создаем сегменты из исходного файла на основе временных меток
         double lastSegmentEndTime = 0.0;
         for (TranscriptionSegment segment : transcriptionResult.getSegments()) {
-            if (Double.parseDouble(segment.getStartTime()) > lastSegmentEndTime) {
-                // Создаем сегмент между переведенными частями
-                Path originalSegmentPath = createSegment(sourceFile, lastSegmentEndTime, Double.parseDouble(segment.getStartTime()), tempDir);
+            double startSeconds = timeStringToSeconds(segment.getStartTime());
+            double endSeconds = timeStringToSeconds(segment.getEndTime());
+            if (startSeconds > lastSegmentEndTime) {
+                Path originalSegmentPath = createSegment(sourceFile, lastSegmentEndTime, startSeconds, tempDir);
                 allSegmentsPaths.add(originalSegmentPath);
             }
-
-            // Добавляем путь к переведенному сегменту
             allSegmentsPaths.add(Paths.get(segment.getAudioFilePath()));
-            lastSegmentEndTime = Double.parseDouble(segment.getEndTime()); // Обновляем время окончания последнего сегмента
+            lastSegmentEndTime = endSeconds;
         }
+
 
         // Сливаем все сегменты в один файл
         Path finalOutput = mergeSegments(allSegmentsPaths, tempDir);
