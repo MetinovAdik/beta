@@ -124,6 +124,14 @@ public class AudioMessageHandler {
             String videoUrl = telegramService.getFullFilePath(filePath);
             Path videoPath = downloadVideo(videoUrl);
             Path audioPath = videoToAudioService.extractAudioFromVideo(videoUrl);
+
+            if (!Files.exists(audioPath)) {
+                logger.error("Audio file does not exist after extraction: {}", audioPath);
+                telegramService.sendMessage(chatId, "Произошла ошибка при обработке видео: аудиофайл не был создан.");
+                return; // Выход из метода, если аудиофайл не существует
+            } else {
+                logger.info("Audio file exists and ready for further processing: {}", audioPath);
+            }
             // Распознавание речи с новым возвращаемым типом
             TranscriptionResult transcriptionResult = speechRecognitionService.recognizeSpeechFromAudioLocal(audioPath);
 
