@@ -66,6 +66,7 @@ public class AudioMessageHandler {
 
                 // Сохранение информации о сгенерированном аудиофайле в объекте сегмента
                 segment.setAudioFilePath(tempFile.toString());
+                logger.info("TTS audio segment saved to temp file: {}", tempFile.toString());
                 // Здесь можно добавить логику для расчета длительности и сохранения ее в segment
             }
 
