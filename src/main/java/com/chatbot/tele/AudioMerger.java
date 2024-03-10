@@ -7,77 +7,86 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 public class AudioMerger {
 
     private static final Logger logger = LoggerFactory.getLogger(AudioMerger.class);
 
-    public Path mergeAudioWithSegments(String sourceFilePath, TranscriptionResult transcriptionResult) throws IOException, InterruptedException {
-        Path outputPath = Paths.get(sourceFilePath).getParent().resolve("output_merged.mp3");
-        StringBuilder ffmpegCmd = new StringBuilder("ffmpeg -y");
+    public Path processAudioWithTranslations(String sourceFilePath, TranscriptionResult transcriptionResult) throws IOException, InterruptedException {
+        // Создаем временную директорию для работы
+        Path tempDir = Files.createTempDirectory("audio_processing");
+        Path sourceFile = Paths.get(sourceFilePath);
 
-        // Добавляем входной файл
-        ffmpegCmd.append(" -i ").append(sourceFilePath);
+        List<Path> allSegmentsPaths = new ArrayList<>();
 
-        StringBuilder filterComplex = new StringBuilder(" -filter_complex \"");
-
-        // Переменная для хранения времени начала следующего сегмента
-        String nextSegmentStartTime = "0";
-
-        int index = 0; // Инициализируем счетчик индекса
+        // Создаем сегменты из исходного файла на основе временных меток
+        double lastSegmentEndTime = 0.0;
         for (TranscriptionSegment segment : transcriptionResult.getSegments()) {
-            // Используем индекс в качестве части идентификатора
-            filterComplex.append(String.format("[0]atrim=0:%s[pre%d]; ", segment.getStartTime(), index));
-            filterComplex.append(String.format("[0]atrim=%s[post%d]; ", segment.getEndTime(), index));
-            // Вставляем переведенный сегмент
-            filterComplex.append(String.format("[1]ainsert=atrim=0:%s:apad=1[insert%d]; ", segment.getDuration(), index));
-            index++; // Увеличиваем счетчик индекса
+            if (Double.parseDouble(segment.getStartTime()) > lastSegmentEndTime) {
+                // Создаем сегмент между переведенными частями
+                Path originalSegmentPath = createSegment(sourceFile, lastSegmentEndTime, Double.parseDouble(segment.getStartTime()), tempDir);
+                allSegmentsPaths.add(originalSegmentPath);
+            }
+
+            // Добавляем путь к переведенному сегменту
+            allSegmentsPaths.add(Paths.get(segment.getAudioFilePath()));
+            lastSegmentEndTime = Double.parseDouble(segment.getEndTime()); // Обновляем время окончания последнего сегмента
         }
 
-        // Соединяем все части
-        filterComplex.append("[pre][insert][post]concat=n=3:v=0:a=1[out]\" -map \"[out]\"");
+        // Сливаем все сегменты в один файл
+        Path finalOutput = mergeSegments(allSegmentsPaths, tempDir);
 
-        // Финализируем команду
-        ffmpegCmd.append(filterComplex).append(" ").append(outputPath.toString());
-
-        logger.info("Executing FFmpeg command: {}", ffmpegCmd);
-
-        // Выполнение команды FFmpeg
-        ProcessBuilder processBuilder = new ProcessBuilder("/bin/sh", "-c", ffmpegCmd.toString());
-        Process process = processBuilder.start();
-
-        // Чтение вывода ошибок из процесса и логирование
-        logProcessOutput(process);
-
-        int exitValue = process.waitFor();
-        if (exitValue != 0) {
-            logger.error("FFmpeg execution error, exit code: {}", exitValue);
-            throw new RuntimeException("FFmpeg execution error: ");
-        }
-
-        logger.info("FFmpeg command executed successfully, output file: {}", outputPath);
-        return outputPath;
+        logger.info("Final audio file created at: {}", finalOutput);
+        return finalOutput;
     }
 
-    private void logProcessOutput(Process process) throws IOException {
-        try (InputStream stderr = process.getErrorStream();
-             BufferedReader reader = new BufferedReader(new InputStreamReader(stderr))) {
+    private Path createSegment(Path sourceFile, double startSeconds, double endSeconds, Path tempDir) throws IOException, InterruptedException {
+        String segmentFileName = "segment_" + startSeconds + "_" + endSeconds + ".mp3";
+        Path segmentPath = tempDir.resolve(segmentFileName);
+
+        String command = String.format("ffmpeg -y -i %s -ss %s -to %s -acodec copy %s",
+                sourceFile, startSeconds, endSeconds, segmentPath);
+
+        executeCommand(command);
+        return segmentPath;
+    }
+
+    private Path mergeSegments(List<Path> segmentsPaths, Path tempDir) throws IOException, InterruptedException {
+        Path outputFile = tempDir.resolve("final_output.mp3");
+
+        StringBuilder fileListContent = new StringBuilder();
+        for (Path segmentPath : segmentsPaths) {
+            fileListContent.append("file '").append(segmentPath).append("'\n");
+        }
+
+        Path fileListPath = tempDir.resolve("filelist.txt");
+        Files.write(fileListPath, fileListContent.toString().getBytes());
+
+        String command = String.format("ffmpeg -y -f concat -safe 0 -i %s -c copy %s", fileListPath, outputFile);
+
+        executeCommand(command);
+        return outputFile;
+    }
+
+    private void executeCommand(String command) throws IOException, InterruptedException {
+        Process process = new ProcessBuilder("/bin/sh", "-c", command).start();
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                logger.error("FFmpeg error output: {}", line);
+                logger.error(line);
             }
         }
 
-        try (InputStream stdout = process.getInputStream();
-             BufferedReader reader = new BufferedReader(new InputStreamReader(stdout))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                logger.info("FFmpeg output: {}", line);
-            }
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new RuntimeException("Command execution failed with exit code " + exitCode);
         }
     }
 }

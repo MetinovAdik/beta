@@ -89,7 +89,7 @@ public class AudioMessageHandler {
 
             // Здесь можно добавить логику для сборки финального аудио из сегментов с учетом их временных меток
             AudioMerger audioMerger = new AudioMerger();
-            Path finalAudioPath = audioMerger.mergeAudioWithSegments(String.valueOf(audioPath), transcriptionResult);
+            Path finalAudioPath = audioMerger.processAudioWithTranslations(String.valueOf(audioPath), transcriptionResult);
             InputFile inputFile = new InputFile(new java.io.File(finalAudioPath.toString()),"tts_audio.mp3","audio/mp3");
             telegramService.getBot().execute(new com.pengrad.telegrambot.request.SendAudio(chatId, inputFile.getFile()));
             logger.info("Final audio file sent to chat ID: {}", chatId);
