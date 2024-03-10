@@ -45,14 +45,20 @@ public class AudioMerger {
         return hours * 3600 + minutes * 60 + seconds;
     }
     public Path processAudioWithTranslations(String sourceFilePath, TranscriptionResult transcriptionResult) throws IOException, InterruptedException {
-        // Создаем временную директорию для работы
+        logger.info("Starting processAudioWithTranslations with sourceFilePath: {}", sourceFilePath);
+
         Path tempDir = Files.createTempDirectory("audio_processing");
+        logger.info("Temporary directory created at: {}", tempDir);
+
         Path sourceFile = Paths.get(sourceFilePath);
+        if (!Files.exists(sourceFile)) {
+            logger.error("Source file does not exist: {}", sourceFile);
+            throw new IOException("Source file does not exist: " + sourceFile);
+        }
 
         List<Path> allSegmentsPaths = new ArrayList<>();
-
-        // Создаем сегменты из исходного файла на основе временных меток
         double lastSegmentEndTime = 0.0;
+
         for (TranscriptionSegment segment : transcriptionResult.getSegments()) {
             double startSeconds = timeStringToSeconds(segment.getStartTime());
             double endSeconds = timeStringToSeconds(segment.getEndTime());
@@ -60,15 +66,23 @@ public class AudioMerger {
                 Path originalSegmentPath = createSegment(sourceFile, lastSegmentEndTime, startSeconds, tempDir);
                 allSegmentsPaths.add(originalSegmentPath);
             }
-            allSegmentsPaths.add(Paths.get(segment.getAudioFilePath()));
+
+            Path segmentAudioPath = Paths.get(segment.getAudioFilePath());
+            if (!Files.exists(segmentAudioPath)) {
+                logger.error("Segment audio file does not exist: {}", segmentAudioPath);
+                continue; // You might want to throw an exception or handle this case differently
+            }
+
+            allSegmentsPaths.add(segmentAudioPath);
             lastSegmentEndTime = endSeconds;
         }
 
-
-        // Сливаем все сегменты в один файл
         Path finalOutput = mergeSegments(allSegmentsPaths, tempDir);
-
         logger.info("Final audio file created at: {}", finalOutput);
+        if (!Files.exists(finalOutput)) {
+            logger.error("Final audio file does not exist after creation: {}", finalOutput);
+        }
+
         return finalOutput;
     }
 
@@ -101,17 +115,21 @@ public class AudioMerger {
     }
 
     private void executeCommand(String command) throws IOException, InterruptedException {
+        logger.info("Executing command: {}", command);
         Process process = new ProcessBuilder("/bin/sh", "-c", command).start();
 
+        StringBuilder errorOutput = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
+                errorOutput.append(line).append("\n");
                 logger.error(line);
             }
         }
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {
+            logger.error("Command execution failed with exit code {}. Error output: {}", exitCode, errorOutput);
             throw new RuntimeException("Command execution failed with exit code " + exitCode);
         }
     }
