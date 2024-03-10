@@ -152,7 +152,7 @@ public class AudioMessageHandler {
             }
             AudioMerger audioMerger = new AudioMerger();
             Path finalAudioPath = audioMerger.processAudioWithTranslations(String.valueOf(audioPath), transcriptionResult);
-            VideoProcessingService videoProcessingService = new VideoProcessingService(); // Or however you choose to instantiate this
+            VideoProcessingService videoProcessingService = new VideoProcessingService();
             Path finalVideoPath = videoProcessingService.createTranslatedVideo(videoPath, finalAudioPath);
             InputFile inputFile = new InputFile(new java.io.File(finalVideoPath.toString()),"tts_video.mp4","video/mp4");
             telegramService.getBot().execute(new com.pengrad.telegrambot.request.SendVideo(chatId, inputFile.getFile()));
