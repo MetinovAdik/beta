@@ -5,6 +5,7 @@ import com.chatbot.tele.resultbox.TranscriptionSegment;
 import com.pengrad.telegrambot.model.File;
 import com.pengrad.telegrambot.model.request.InputFile;
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -23,26 +25,41 @@ public class AudioMessageHandler {
     private final TranslationService translationService;
     private final TextToSpeechService textToSpeechService; // Reference to TextToSpeechService
     private final VideoToAudioService videoToAudioService;
+    private final OkHttpClient client;
     private static final Logger logger = LoggerFactory.getLogger(AudioMessageHandler.class);
     @Autowired
     public AudioMessageHandler(OkHttpClient httpClient, SpeechRecognitionService speechRecognitionService,
                                TelegramService telegramService, TranslationService translationService,
-                               TextToSpeechService textToSpeechService, VideoToAudioService videoToAudioService) { // Include TextToSpeechService in constructor
+                               TextToSpeechService textToSpeechService, VideoToAudioService videoToAudioService, OkHttpClient client) { // Include TextToSpeechService in constructor
         this.httpClient = httpClient;
         this.speechRecognitionService = speechRecognitionService;
         this.telegramService = telegramService;
         this.translationService = translationService;
         this.textToSpeechService = textToSpeechService; // Initialize TextToSpeechService
         this.videoToAudioService = videoToAudioService;
+        this.client = client;
     }
+    private Path downloadAudio(String audioUrl) throws IOException {
+        Request request = new Request.Builder().url(audioUrl).build();
+        Response response = client.newCall(request).execute();
 
+        if (!response.isSuccessful()) {
+            throw new IOException("Failed to download audio from " + audioUrl);
+        }
+
+        Path tempAudioFile = Files.createTempFile("downloaded-audio", ".mp3");
+        Files.copy(response.body().byteStream(), tempAudioFile, StandardCopyOption.REPLACE_EXISTING);
+
+        response.close();
+        return tempAudioFile;
+    }
     public void handleAudio(String fileId, long chatId) {
         logger.info("Handling audio for chat ID: {}, file ID: {}", chatId, fileId);
         try {
             File file = telegramService.getFile(fileId);
             String filePath = file.filePath();
             String audioUrl = telegramService.getFullFilePath(filePath);
-
+            Path audioPath = downloadAudio(audioUrl);
             // Распознавание речи с новым возвращаемым типом
             TranscriptionResult transcriptionResult = speechRecognitionService.recognizeSpeechFromAudio(audioUrl);
 
@@ -72,7 +89,7 @@ public class AudioMessageHandler {
 
             // Здесь можно добавить логику для сборки финального аудио из сегментов с учетом их временных меток
             AudioMerger audioMerger = new AudioMerger();
-            Path finalAudioPath = audioMerger.mergeAudioWithSegments(filePath, transcriptionResult);
+            Path finalAudioPath = audioMerger.mergeAudioWithSegments(String.valueOf(audioPath), transcriptionResult);
             InputFile inputFile = new InputFile(new java.io.File(finalAudioPath.toString()),"tts_audio.mp3","audio/mp3");
             telegramService.getBot().execute(new com.pengrad.telegrambot.request.SendAudio(chatId, inputFile.getFile()));
             logger.info("Final audio file sent to chat ID: {}", chatId);
