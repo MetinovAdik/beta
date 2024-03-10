@@ -1,0 +1,1 @@
+{"text": " Hello, the world.", "segments": [{"id": 0, "seek": 0, "start": 0.0, "end": 2.0, "text": " Hello, the world.", "tokens": [50364, 2425, 11, 264, 1002, 13, 50464], "temperature": 0.0, "avg_logprob": -0.7938471436500549, "compression_ratio": 0.68, "no_speech_prob": 0.04035202041268349}], "language": "en"}
