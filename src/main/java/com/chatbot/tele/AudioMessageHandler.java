@@ -167,6 +167,9 @@ public class AudioMessageHandler {
             AudioMerger audioMerger = new AudioMerger();
             Path finalAudioPath = audioMerger.processAudioWithTranslations(String.valueOf(audioPath), transcriptionResult);
             VideoProcessingService videoProcessingService = new VideoProcessingService();
+            InputFile iinputFile = new InputFile(new java.io.File(finalAudioPath.toString()),"tts_audio.mp3","audio/mp3");
+            telegramService.getBot().execute(new com.pengrad.telegrambot.request.SendAudio(chatId, iinputFile.getFile()));
+            telegramService.sendMessage(chatId, "Начинаю склеивание аудио с видео");
             Path finalVideoPath = videoProcessingService.createTranslatedVideo(videoPath, finalAudioPath);
             InputFile inputFile = new InputFile(new java.io.File(finalVideoPath.toString()),"tts_video.mp4","video/mp4");
             telegramService.getBot().execute(new com.pengrad.telegrambot.request.SendVideo(chatId, inputFile.getFile()));

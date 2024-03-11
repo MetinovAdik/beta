@@ -60,7 +60,7 @@ public class SpeechRecognitionService {
         if (exitVal != 0) {
             logger.error("Whisper failed with exit code " + exitVal);
         }
-        
+
         return result;
     }
     public TranscriptionResult recognizeSpeechFromAudio(String audioUrl) throws IOException, InterruptedException {
