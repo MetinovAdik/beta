@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
+import java.time.Duration;
 @Service
 public class VideoProcessingService {
 
@@ -32,22 +32,40 @@ public class VideoProcessingService {
 
     private void executeCommand(String command) throws IOException, InterruptedException {
         Process process = new ProcessBuilder("/bin/sh", "-c", command).start();
+        long startTime = System.currentTimeMillis();
+        Duration timeout = Duration.ofMinutes(15);
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                logger.info(line);
+        new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    logger.info(line);
+                }
+            } catch (IOException e) {
+                logger.error("Error reading process input stream", e);
             }
+        }).start();
+
+        new Thread(() -> {
+            try (BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+                String line;
+                while ((line = errorReader.readLine()) != null) {
+                    logger.error(line);
+                }
+            } catch (IOException e) {
+                logger.error("Error reading process error stream", e);
+            }
+        }).start();
+
+        while (process.isAlive()) {
+            if ((System.currentTimeMillis() - startTime) > timeout.toMillis()) {
+                process.destroy();
+                throw new RuntimeException("FFmpeg command execution failed due to timeout");
+            }
+            Thread.sleep(1000); // Проверять каждую секунду
         }
 
-        try (BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-            String line;
-            while ((line = errorReader.readLine()) != null) {
-                logger.error(line);
-            }
-        }
-
-        int exitCode = process.waitFor();
+        int exitCode = process.exitValue();
         if (exitCode != 0) {
             throw new RuntimeException("FFmpeg command execution failed with exit code " + exitCode);
         }
